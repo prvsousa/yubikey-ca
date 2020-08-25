@@ -22,9 +22,19 @@ def get_pin():
 def get_ca_cert():
     return run('p11tool', '--provider=%s' % pkcs11_module, '--export', '%s;type=cert' % args.pkcs11_url).strip()+b"\n"
 
+def get_pubkey_ca():
+    return run('openssl', 'x509', '-noout', '-pubkey', input=get_ca_cert())
+
 def get_ssh_ca():
     pubkey = run('openssl', 'x509', '-noout', '-pubkey', input=get_ca_cert())
     return run('ssh-keygen', '-i', '-m', 'PKCS8', '-f', '/dev/stdin', input=pubkey)
+
+#TODO: hardcoded with ca.pub -> file of certificate authority public key
+def ca_encrypt_data():
+    return run('openssl', 'rsautl', '-encrypt', '-in', '%s' % args.infile, '-out', '%s' % args.outfile, '-inkey', 'ca.pub', '-pubin')
+
+def ca_decrypt_data():
+    return run('openssl', 'rsautl', '-decrypt', '-in', '%s' % args.encfile, '-out', '%s' % args.decfile, '-engine', 'pkcs11', '-keyform' ,'engine', '-inkey', 'pkcs11:manufacturer=piv_II;id=%02')
 
 class Shell:
     def __init__(self):
@@ -122,6 +132,7 @@ parser.add_argument('--debug', action='store_true')
 
 subparsers.add_parser('ssh-ca')
 subparsers.add_parser('ca-cert')
+subparsers.add_parser('ca-pubkey')
 
 parser_init_key = subparsers.add_parser('init-key')
 parser_init_key.add_argument('--subject', '-s', default='/CN=Yubikey CA')
@@ -140,6 +151,15 @@ parser_client_cert = subparsers.add_parser('client-cert')
 parser_client_cert.add_argument('--subject', '-s', required=True)
 parser_client_cert.add_argument('--keyfile', '-k', default='/dev/stdin')
 parser_client_cert.add_argument('--pkcs12', '-e', action='store_true')
+
+parser_client_cert = subparsers.add_parser('encrypt-data')
+parser_client_cert.add_argument('--infile', '-p', required=True)
+parser_client_cert.add_argument('--outfile', '-t', required=True)
+
+parser_client_cert = subparsers.add_parser('decrypt-data')
+parser_client_cert.add_argument('--encfile', '-e', required=True)
+parser_client_cert.add_argument('--decfile', '-d', required=True)
+
 
 parser_client_revoke = subparsers.add_parser('client-revoke')
 parser_client_revoke.add_argument('serial', nargs='+')
@@ -238,6 +258,15 @@ if args.action == 'ssh-ca':
 if args.action == 'ca-cert':
     sys.stdout.buffer.write(get_ca_cert())
 
+if args.action == 'ca-pubkey':
+    sys.stdout.buffer.write(get_pubkey_ca())
+
+if args.action == 'encrypt-data':
+    sys.stdout.buffer.write(ca_encrypt_data())
+
+if args.action == 'decrypt-data':
+    sys.stdout.buffer.write(ca_decrypt_data())
+    
 if args.action == 'ssh-cert':
     keyfile = args.keyfile
     if not keyfile.endswith('.pub') and os.path.exists(keyfile + '.pub'):
@@ -271,9 +300,10 @@ if args.action == 'ssh-cert':
     ca_commit('SSH: Issuing certificate  %s\n\nId: %s' % (serial, keyid))
 
 if args.action == 'client-cert':
-    keyfile="pkcs11:manufacturer=piv_II;id=%02"
+    args.keyfile="pkcs11:manufacturer=piv_II;id=%02"
     with Shell() as sh:
-        csr = sh.run('openssl', 'req', '-new', '-sha256', '-subj', args.subject, '-engine', 'pkcs11', '-keyform', 'engine', '-key', keyfile)
+        #csr = sh.run('openssl', 'req', '-new', '-sha256', '-subj', args.subject, '-engine', 'pkcs11', '-keyform', 'engine', '-key', args.keyfile)
+        csr = sh.run('openssl', 'ecparam', '-genkey' '-name', 'secp256k1', '-subj', args.subject, '-engine', 'pkcs11', '-keyform', 'engine', '-key', args.keyfile)
 
     with open('serial') as fd:
         serial = fd.read()
@@ -283,7 +313,7 @@ if args.action == 'client-cert':
 
     if args.pkcs12:
         with Shell() as sh:
-            sh.run('openssl', 'pkcs12', '-export', '-in', sh.pipein(cert), '-inkey', keyfile, stdout=None)
+            sh.run('openssl', 'pkcs12', '-export', '-in', sh.pipein(cert), '-inkey', args.keyfile, stdout=None)
     else:
         sys.stdout.buffer.write(cert)
 
