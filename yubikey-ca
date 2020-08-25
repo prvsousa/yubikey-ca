@@ -271,9 +271,9 @@ if args.action == 'ssh-cert':
     ca_commit('SSH: Issuing certificate  %s\n\nId: %s' % (serial, keyid))
 
 if args.action == 'client-cert':
-    key = open(args.keyfile, 'rb').read()
+    keyfile="pkcs11:manufacturer=piv_II;id=%02"
     with Shell() as sh:
-        csr = sh.run('openssl', 'req', '-new', '-key', sh.pipein(key), '-sha256', '-days', '365', '-subj', args.subject)
+        csr = sh.run('openssl', 'req', '-new', '-sha256', '-subj', args.subject, '-engine', 'pkcs11', '-keyform', 'engine', '-key', keyfile)
 
     with open('serial') as fd:
         serial = fd.read()
@@ -283,7 +283,7 @@ if args.action == 'client-cert':
 
     if args.pkcs12:
         with Shell() as sh:
-            sh.run('openssl', 'pkcs12', '-export', '-in', sh.pipein(cert), '-inkey', sh.pipein(key), stdout=None)
+            sh.run('openssl', 'pkcs12', '-export', '-in', sh.pipein(cert), '-inkey', keyfile, stdout=None)
     else:
         sys.stdout.buffer.write(cert)
 
