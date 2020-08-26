@@ -93,11 +93,19 @@ Generate a CRL containing the revoked certificates:
 
 ### Generate private key of Charles
 
-* `openssl ecparam -name secp256k1 -genkey -noout -out charles_priv_key.pem`
+* `openssl ecparam -name prime256v1 -genkey -noout -out charles_priv_key.pem`
 
 ### Importing key on yubikey
 
-* `yubikey-ca init-key -f charles_priv_key.pem --slot 9d`
+* `yubico-piv-tool -a import-key -s 9d -k -i charles_priv_key.pem`
+
+### Generate certificate from private key
+
+* `openssl req -x509 -days 3650 -sha256 -subj "/O=DCC/CN=Charles" -key charles_priv_key.pem > CharlesCert.pem`
+
+### Import certificate to the slot 9d
+
+* `yubico-piv-tool -s9d -aimport-certificate -i CharlesCert.pem`
 
 ### Derive a shared symmetric key between Charles and Dennis (With dennis public key)
 
