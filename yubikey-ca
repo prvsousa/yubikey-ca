@@ -29,12 +29,6 @@ def get_ssh_ca():
     pubkey = run('openssl', 'x509', '-noout', '-pubkey', input=get_ca_cert())
     return run('ssh-keygen', '-i', '-m', 'PKCS8', '-f', '/dev/stdin', input=pubkey)
 
-#TODO: hardcoded with ca.pub -> file of certificate authority public key
-def ca_encrypt_data():
-    return run('openssl', 'rsautl', '-encrypt', '-in', '%s' % args.infile, '-out', '%s' % args.outfile, '-inkey', 'ca.pub', '-pubin')
-
-def ca_decrypt_data():
-    return run('openssl', 'rsautl', '-decrypt', '-in', '%s' % args.encfile, '-out', '%s' % args.decfile, '-engine', 'pkcs11', '-keyform' ,'engine', '-inkey', 'pkcs11:manufacturer=piv_II;id=%02')
 
 class Shell:
     def __init__(self):
@@ -131,13 +125,19 @@ parser.add_argument('--pkcs11-url', '-u', default=os.getenv('PKCS11_URL', 'pkcs1
 parser.add_argument('--debug', action='store_true')
 
 subparsers.add_parser('ssh-ca')
-subparsers.add_parser('ca-cert')
+
+parser_ca_cert = subparsers.add_parser('ca-cert')
+parser_ca_cert.add_argument('--pkcs11-url', '-u', default=os.getenv('PKCS11_URL', 'pkcs11:manufacturer=piv_II;id\
+=%02'))
+
 subparsers.add_parser('ca-pubkey')
 
 parser_init_key = subparsers.add_parser('init-key')
+parser_init_key.add_argument('--typealgorithm', '-t',default='ECCP256', help="Choose type of algorithm")
 parser_init_key.add_argument('--subject', '-s', default='/CN=Yubikey CA')
 parser_init_key.add_argument('--keyfile', '-k', default='/dev/stdin')
 parser_init_key.add_argument('--generate', '-g', action='store_true', help='Generate key on device')
+parser_init_key.add_argument('--slot', '-n', default='9c', help='Choose slot from 9a, 9b, 9c, 9d')
 
 parser_init_ca = subparsers.add_parser('init-ca')
 
@@ -216,24 +216,23 @@ ca_config = '\n'.join([
 
 if args.action == 'init-key':
     if args.generate:
-        pubkey = run('yubico-piv-tool', '-s9c', '-agenerate', '-ARSA2048')
+        pubkey = run('yubico-piv-tool', '-s%s' % args.slot, '-agenerate', '-A%s' % args.typealgorithm)
         # Generate a temporary self-signed certificate in order to make openssl happy
         with Shell() as sh:
-            cert = sh.run('yubico-piv-tool', '-s9c', '-averify', '-P%s' % get_pin(), '-aselfsign', '-i%s' % sh.pipein(pubkey), '-S/CN=TempCA')
+            cert = sh.run('yubico-piv-tool', '-s%s' % args.slot, '-averify', '-P%s' % get_pin(), '-aselfsign', '-i%s' % sh.pipein(pubkey), '-S/CN=TempCA')
         with Shell() as sh:
-            sh.run('yubico-piv-tool', '-s9c', '-aimport-certificate', '-i%s' % sh.pipein(cert))
+            sh.run('yubico-piv-tool', '-s%s' % args.slot, '-aimport-certificate', '-i%s' % sh.pipein(cert))
         # Selfsign with openssl now, in order to have CA in purposes
         with Shell() as sh:
-            cert = sh.run('openssl', 'req', '-x509', '-days', '3650', '-sha256', '-subj', args.subject, '-engine', 'pkcs11',
-                          '-keyform', 'engine', '-key', args.pkcs11_url, '-passin', 'pass:%s' % get_pin())
+            cert = sh.run('openssl', 'req', '-x509', '-days', '3650', '-sha256', '-subj', args.subject, '-engine', 'pkcs11', '-keyform', 'engine', '-key', args.pkcs11_url, '-passin', 'pass:%s' % get_pin())
     else:
         key = open(args.keyfile, 'rb').read()
         with Shell() as sh:
-            sh.run('yubico-piv-tool', '-s9c', '-aimport-key', '-i', sh.pipein(key))
+            sh.run('yubico-piv-tool', '-s%s' % args.slot, '-aimport-key', '-i', sh.pipein(key))
         with Shell() as sh:
             cert = sh.run('openssl', 'req', '-x509', '-days', '3650', '-sha256', '-subj', args.subject, '-key', sh.pipein(key))
     with Shell() as sh:
-        sh.run('yubico-piv-tool', '-s9c', '-aimport-certificate', '-i', sh.pipein(cert))
+        sh.run('yubico-piv-tool', '-s%s' % args.slot, '-aimport-certificate', '-i', sh.pipein(cert))
 
 if args.action == 'init-ca':
     if not os.path.exists('.git'):
@@ -261,11 +260,6 @@ if args.action == 'ca-cert':
 if args.action == 'ca-pubkey':
     sys.stdout.buffer.write(get_pubkey_ca())
 
-if args.action == 'encrypt-data':
-    sys.stdout.buffer.write(ca_encrypt_data())
-
-if args.action == 'decrypt-data':
-    sys.stdout.buffer.write(ca_decrypt_data())
     
 if args.action == 'ssh-cert':
     keyfile = args.keyfile
@@ -302,8 +296,9 @@ if args.action == 'ssh-cert':
 if args.action == 'client-cert':
     args.keyfile="pkcs11:manufacturer=piv_II;id=%02"
     with Shell() as sh:
-        #csr = sh.run('openssl', 'req', '-new', '-sha256', '-subj', args.subject, '-engine', 'pkcs11', '-keyform', 'engine', '-key', args.keyfile)
-        csr = sh.run('openssl', 'ecparam', '-genkey' '-name', 'secp256k1', '-subj', args.subject, '-engine', 'pkcs11', '-keyform', 'engine', '-key', args.keyfile)
+        csr = sh.run('openssl', 'req', '-new', '-sha256', '-subj', args.subject, '-engine', 'pkcs11', '-keyform', 'engine', '-key', args.keyfile)
+        #csr = sh.run('openssl', 'ecparam', '-genkey' '-name', 'secp256k1', '-subj', args.subject, '-engine', 'pkcs11', '-keyform', 'engine', '-key', args.keyfile)
+        print(csr)
 
     with open('serial') as fd:
         serial = fd.read()

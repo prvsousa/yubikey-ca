@@ -37,19 +37,21 @@ have three possibilities :
 * On-device key generation: `yubikey-ca init-key -g`. This
 is the recommended method, unless your device is vulnerable to
 [this security advisory](https://www.yubico.com/support/security-advisories/ysa-2017-01/).
-* Software key generation: `openssl genrsa 2048 | yubikey-ca init-key`. This
-is the recommened method if your device is affected by the previous issue.
 * Using an existing key, in PEM format: `yubikey-ca init-key -f key.pem`.
 
 You should also give a name to your CA, the default being "Yubikey
-CA". You can do so with the `-s` option :
+CA". You can do so with the `-s` option. Also, you can choose the slot of yubikey where you want to generate the key with the `--slot`. The algorithm can also be choosed with the `--typealgorithm` option:
 
-* `yubikey-ca init-key -g -s "/O=Example Inc/CN=Certificate Authority"`
+* `yubikey-ca init-key -g -s "/O=Example Inc/CN=Certificate Authority" --slot "9c" --typealgorithm="RSA2048"`
 
 Now that your CA key is on the device, you can access to your CA
 certificate:
 
 * `yubikey-ca ca-cert`
+
+You can choose different slots with the `-u` option identified by key.
+
+* `yubikey-ca ca-cert -u 'pkcs11:manufacturer=piv_II;id=%02'`
 
 or to your SSH CA certificate:
 
@@ -86,6 +88,27 @@ To revoke certificates, you must provide their serial:
 Generate a CRL containing the revoked certificates:
 
 * `yubikey-ca crl`
+
+## Encryption and Decryption with ECC (Example with Charles and Denis, being Charles the owner of the yubikey)
+
+### Generate private key of Charles
+
+* `openssl ecparam -name secp256k1 -genkey -noout -out charles_priv_key.pem`
+
+### Importing key on yubikey
+
+* `yubikey-ca init-key -f charles_priv_key.pem --slot 9d`
+
+### Derive a shared symmetric key between Charles and Dennis (With dennis public key)
+
+* ` openssl pkeyutl -derive -engine pkcs11 -keyform engine -inkey  'pkcs11:manufacturer=piv_II;id=%03' -peerkey denis_pub_key.pem -out charles_shared_secret.bin`
+
+The other peer has to do the same
+
+Then, we can test the functionality with:
+
+`echo 'I love you Bob' > plain.txt\nopenssl enc -aes256 -base64 -k $(base64 charles_shared_secret.bin) -e -in plain.txt -out cipher.txt\nopenssl enc -aes256 -base64 -k $(base64 denis_shared_secret.bin) -d -in cipher.txt -out plain_again.txt`
+
 
 ## Using the SSH CA
 
