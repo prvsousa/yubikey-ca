@@ -1,2 +1,0 @@
-V	210826075535Z		00	unknown	/O=C3P/CN=Alice
-V	210826075849Z		01	unknown	/O=C3P/CN=Bob
