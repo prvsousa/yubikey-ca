@@ -115,7 +115,9 @@ The other peer has to do the same
 
 Then, we can test the functionality with:
 
-`echo 'I love you Bob' > plain.txt\nopenssl enc -aes256 -base64 -k $(base64 charles_shared_secret.bin) -e -in plain.txt -out cipher.txt\nopenssl enc -aes256 -base64 -k $(base64 denis_shared_secret.bin) -d -in cipher.txt -out plain_again.txt`
+* `echo 'I love you Bob' > plain.txt`
+* `openssl enc -aes256 -base64 -k $(base64 charles_shared_secret.bin) -e -in plain.txt -out cipher.txt`
+* `openssl enc -aes256 -base64 -k $(base64 denis_shared_secret.bin) -d -in cipher.txt -out plain_again.txt`
 
 
 ## Using the SSH CA
