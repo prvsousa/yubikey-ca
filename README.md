@@ -1,8 +1,8 @@
-# yubikey-ca
+# ./scriptyk
 
 ## Overview
 
-`yubikey-ca` is a simple command line tool used to build a PKI and SSH
+`./scriptyk` is a simple command line tool used to build a PKI and SSH
 CA, powered by a Yubikey (or other PKCS#11 tokens) for private key
 management and git for history.
 
@@ -27,35 +27,35 @@ issue a prompt if the PIN is needed.
 
 ## Initialization
 
-`yubikey-ca init-ca` will initialize a new CA in the current directory
+`./scriptyk init-ca` will initialize a new CA in the current directory
 (you probably want an empty one). It will create a new git repository,
 files needed by the CA, and do a first commit.
 
-`yubikey-ca init-key` will initialize the private key on the Yubikey. You
+`./scriptyk init-key` will initialize the private key on the Yubikey. You
 have three possibilities :
 
-* On-device key generation: `yubikey-ca init-key -g`. This
+* On-device key generation: `./scriptyk init-key -g`. This
 is the recommended method, unless your device is vulnerable to
 [this security advisory](https://www.yubico.com/support/security-advisories/ysa-2017-01/).
-* Using an existing key, in PEM format: `yubikey-ca init-key -f key.pem`.
+* Using an existing key, in PEM format: `./scriptyk init-key -f key.pem`.
 
 You should also give a name to your CA, the default being "Yubikey
 CA". You can do so with the `-s` option. Also, you can choose the slot of yubikey where you want to generate the key with the `--slot`. The algorithm can also be choosed with the `--typealgorithm` option:
 
-* `yubikey-ca init-key -g -s "/O=Example Inc/CN=Certificate Authority" --slot "9c" --typealgorithm="RSA2048"`
+* `./scriptyk init-key -g -s "/O=Example Inc/CN=Certificate Authority" --slot "9c" --typealgorithm="RSA2048"`
 
 Now that your CA key is on the device, you can access to your CA
 certificate:
 
-* `yubikey-ca ca-cert`
+* `./scriptyk ca-cert`
 
 You can choose different slots with the `-u` option identified by key.
 
-* `yubikey-ca ca-cert -u 'pkcs11:manufacturer=piv_II;id=%02'`
+* `./scriptyk ca-cert -u 'pkcs11:manufacturer=piv_II;id=%02'`
 
 or to your SSH CA certificate:
 
-* `yubikey-ca ssh-ca`
+* `./scriptyk ssh-ca`
 
 ## Using the PKI
 
@@ -63,11 +63,11 @@ or to your SSH CA certificate:
 
 Generating a certificate:
 
-* `openssl genrsa 2048 | yubikey-ca client-cert`
+* `openssl genrsa 2048 | ./scriptyk client-cert`
 
 You must give a name to the certificate, for example:
 
-* `yubikey-ca client-cert -s "/O=Example Inc/CN=John Doe"`
+* `./scriptyk client-cert -s "/O=Example Inc/CN=John Doe"`
 
 You can use other algorithms for your client certificates, for example
 `openssl genrsa 4096` for a different key size or `openssl ecparam
@@ -83,11 +83,11 @@ serial and the last one the certificate name.
 
 To revoke certificates, you must provide their serial:
 
-* `yubikey-ca client-revoke 01 03`
+* `./scriptyk client-revoke 01 03`
 
 Generate a CRL containing the revoked certificates:
 
-* `yubikey-ca crl`
+* `./scriptyk crl`
 
 ## Encryption and Decryption with ECC 
 
@@ -126,7 +126,7 @@ Then, we can test the functionality with:
 
 ### Signing SSH certificates
 
-* `yubikey-ca ssh-cert id_rsa.pub`
+* `./scriptyk ssh-cert id_rsa.pub`
 
 It will generate `id_rsa-cert.pub`, that can be used by the owner of the
 corresponding private key, either as-is, or with the `CertificateFile`
@@ -145,11 +145,11 @@ field of the provided SSH public key, can be configured with `-I`.
 
 Revoking certificates is done by providing serials:
 
-* `yubikey-ca ssh-revoke 16388656242419284907 14560815252314548972`
+* `./scriptyk ssh-revoke 16388656242419284907 14560815252314548972`
 
 You can the generate a KRL containing the revoked certificates :
 
-* `yubikey-ca krl`
+* `./scriptyk krl`
 
 ### Principals
 
@@ -173,9 +173,9 @@ By default, the server-side principals list only contains the target user
 In `/etc/ssh/sshd_config`:
 
 * `TrustedUserCAKeys /etc/ssh/authorized_ca` where `authorized_ca`
-contains the result of `yubikey-ca ssh-ca`. You can have multiple entries.
+contains the result of `./scriptyk ssh-ca`. You can have multiple entries.
 * `RevokedKeys /etc/ssh/revoked_keys` where `revoked_keys` contains the
-result of `yubikey-ca krl`. **Warning**: Be sure to have an empty KRL
+result of `./scriptyk krl`. **Warning**: Be sure to have an empty KRL
 here initially, because if the file does not exists all keys will be
 rejected after restarting `sshd`
 
@@ -231,7 +231,7 @@ single thing "just in case someone needs them".
 
 ## Using another PKCS#11 token
 
-Althought yubikey-ca is primarily intended to be used with a Yubikey,
+Althought ./scriptyk is primarily intended to be used with a Yubikey,
 it can be used with others PKCS#11 tokens:
 
 * If you must use another provider than the default (`opensc-pkcs11.so`),
@@ -268,6 +268,8 @@ Example usage:
 ```
 export SOFTHSM2_CONF=/path/to/softhsm2.conf
 
-yubikey-ca -m /usr/lib/softhsm/libsofthsm2.so -u "pkcs11:token=SoftHSM;id=%02" ca-cert
-PKCS11_MODULE="/usr/lib/softhsm/libsofthsm2.so" PKCS11_URL="pkcs11:token=SoftHSM;id=%02" yubikey-ca client-cert
+./scriptyk -m /usr/lib/softhsm/libsofthsm2.so -u "pkcs11:token=SoftHSM;id=%02" ca-cert
+PKCS11_MODULE="/usr/lib/softhsm/libsofthsm2.so" PKCS11_URL="pkcs11:token=SoftHSM;id=%02" ./scriptyk client-cert
 ```
+
+
