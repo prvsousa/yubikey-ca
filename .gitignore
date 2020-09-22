@@ -1,0 +1,10 @@
+certs/
+crlnumber
+*.crt
+*.crl
+*.pem
+*.csr
+index.txt
+index.txt.attr
+ssh-index.txt
+serial
