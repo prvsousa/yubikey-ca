@@ -40,7 +40,7 @@ is the recommended method, unless your device is vulnerable to
 * Using an existing key, in PEM format: `./scriptyk init-key -f key.pem`.
 
 You should also give a name to your CA, the default being "Yubikey
-CA". You can do so with the `-s` option. Also, you can choose the slot of yubikey where you want to generate the key with the `--slot`. The algorithm can also be choosed with the `--typealgorithm` option:
+CA". You can do so with the `-s` option. Also, you can choose the slot of yubikey where you want to generate the key with the `--slot`. The algorithm (RSA2048 or ECCP256) can also be choosed with the `--typealgorithm` option:
 
 * `./scriptyk init-key -g -s "/O=Example Inc/CN=Certificate Authority" --slot "9c" --typealgorithm="RSA2048"`
 
