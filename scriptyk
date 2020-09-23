@@ -25,10 +25,6 @@ def get_ca_cert():
 def get_pubkey_ca():
     return run('openssl', 'x509', '-noout', '-pubkey', input=get_ca_cert())
 
-def get_ssh_ca():
-    pubkey = run('openssl', 'x509', '-noout', '-pubkey', input=get_ca_cert())
-    return run('ssh-keygen', '-i', '-m', 'PKCS8', '-f', '/dev/stdin', input=pubkey)
-
 
 class Shell:
     def __init__(self):
@@ -105,7 +101,6 @@ def ca_commit(message):
         if os.path.exists(f):
             os.unlink(f)
 
-    subprocess.check_call(['git', 'add', 'ssh-index.txt'])
     subprocess.check_call(['git', 'add', 'index.txt'])
     subprocess.check_call(['git', 'add', 'index.txt.attr'])
     subprocess.check_call(['git', 'add', 'crlnumber'])
@@ -123,8 +118,6 @@ parser.add_argument('--pkcs11-module', '-m', default=os.getenv('PKCS11_MODULE', 
 parser.add_argument('--pkcs11-url', '-u', default=os.getenv('PKCS11_URL', 'pkcs11:manufacturer=piv_II;id=%02'))
 parser.add_argument('--debug', action='store_true')
 
-subparsers.add_parser('ssh-ca')
-
 parser_ca_cert = subparsers.add_parser('ca-cert')
 parser_ca_cert.add_argument('--pkcs11-url', '-u', default=os.getenv('PKCS11_URL', 'pkcs11:manufacturer=piv_II;id\
 =%02'))
@@ -140,11 +133,6 @@ parser_init_key.add_argument('--slot', '-n', default='9c', help='Choose slot fro
 
 parser_init_ca = subparsers.add_parser('init-ca')
 
-parser_ssh_cert = subparsers.add_parser('ssh-cert')
-parser_ssh_cert.add_argument('--principals', '-n', help='comma-separated list of principals (see CERTIFICATES in ssh-keygen)')
-parser_ssh_cert.add_argument('--id', '-I')
-parser_ssh_cert.add_argument('--options', '-O', action='append', default=[])
-parser_ssh_cert.add_argument('keyfile')
 
 parser_client_cert = subparsers.add_parser('client-cert')
 parser_client_cert.add_argument('--subject', '-s', required=True)
@@ -162,9 +150,6 @@ parser_client_cert.add_argument('--decfile', '-d', required=True)
 
 
 parser_client_revoke = subparsers.add_parser('client-revoke')
-parser_client_revoke.add_argument('serial', nargs='+')
-
-parser_client_revoke = subparsers.add_parser('ssh-revoke')
 parser_client_revoke.add_argument('serial', nargs='+')
 
 parser_crl = subparsers.add_parser('crl')
@@ -239,7 +224,7 @@ if args.action == 'init-ca':
         subprocess.check_call(['git', 'init'])
     if not os.path.exists('certs'):
         os.mkdir('certs')
-    for f in ('index.txt', 'index.txt.attr', 'ssh-index.txt', 'certs/.keep'):
+    for f in ('index.txt', 'index.txt.attr', 'certs/.keep'):
         if not os.path.exists(f):
             with open(f, 'w+') as fd:
                 pass
@@ -247,12 +232,9 @@ if args.action == 'init-ca':
         if not os.path.exists(f):
             with open(f, 'w+') as fd:
                 fd.write('00\n')
-    for f in ('index.txt', 'index.txt.attr', 'ssh-index.txt', 'certs', 'serial', 'crlnumber'):
+    for f in ('index.txt', 'index.txt.attr', 'certs', 'serial', 'crlnumber'):
         subprocess.check_call(['git', 'add', f])
     subprocess.check_output(['git', 'commit', '-m', 'CA initialization'])
-
-if args.action == 'ssh-ca':
-    sys.stdout.buffer.write(get_ssh_ca())
 
 if args.action == 'ca-cert':
     sys.stdout.buffer.write(get_ca_cert())
@@ -261,38 +243,6 @@ if args.action == 'ca-pubkey':
     sys.stdout.buffer.write(get_pubkey_ca())
 
     
-if args.action == 'ssh-cert':
-    keyfile = args.keyfile
-    if not keyfile.endswith('.pub') and os.path.exists(keyfile + '.pub'):
-        keyfile += '.pub'
-
-    with open(keyfile) as fd:
-        pubkey = fd.read().strip()
-
-    sshca = get_ssh_ca()
-    if args.id:
-        keyid = args.id
-    else:
-        keyid = pubkey.split(maxsplit=2)[2]
-    serial = int(os.urandom(8).hex(), 16)
-    with Shell() as sh:
-        ssh_keygen_args = ['-s', sh.pipein(sshca), '-D', pkcs11_module, '-I', keyid, '-z', str(serial)]
-        if args.principals:
-            ssh_keygen_args.append('-n')
-            ssh_keygen_args.append(args.principals)
-        if args.options:
-            for opt in args.options:
-                ssh_keygen_args.append('-O')
-                ssh_keygen_args.append(opt)
-        ssh_keygen_args.append(keyfile)
-        sys.stdout.buffer.write(sh.run('ssh-keygen', *ssh_keygen_args))
-    pubkey_encoded = base64.b64encode(pubkey.encode()).decode()
-    principals = (args.principals and args.principals) or ''
-    now = datetime.datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')
-    with open('ssh-index.txt', 'a+') as fd:
-        fd.write('V serial:{serial} added:{now} pub:{pubkey_encoded} principals:{principals} id:{keyid}\n'.format(**locals()))
-    ca_commit('SSH: Issuing certificate  %s\n\nId: %s' % (serial, keyid))
-
 if args.action == 'client-cert':
     with Shell() as sh:
         sh.run('openssl', 'ecparam', '-name', 'prime256v1', '-genkey', '-noout', '-out', 'device1_priv_key.pem')# % args.subjectname)
@@ -323,27 +273,3 @@ if args.action == 'crl':
     with Shell() as sh:
         sh.run(*openssl_ca(sh), '-gencrl', '-crldays', '3650', stdout=None)
     ca_commit('Issuing a new CRL')
-
-if args.action == 'ssh-revoke':
-    serials = set("serial:%s" % s for s in args.serial)
-    new_index = []
-    with open('ssh-index.txt') as fd:
-        for entry in fd:
-            validity, serial, data = entry.strip().split(maxsplit=2)
-            if serial in serials:
-                validity = 'R'
-            new_index.append("%s %s %s" % (validity, serial, data))
-    with open('ssh-index.txt', 'w+') as fd:
-        fd.write('\n'.join(new_index) + '\n')
-    ca_commit('SSH: Revokating certificates\n\nSerials:\n%s\n' % '\n'.join(serials))
-
-if args.action == 'krl':
-    krl_data = []
-    with open('ssh-index.txt') as fd:
-        for entry in fd:
-            validity, serial, data = entry.strip().split(maxsplit=2)
-            if validity == 'R':
-                krl_data.append('serial: %s' % serial.split(':')[1])
-    with Shell() as sh:
-        sh.run('ssh-keygen', '-k', '-f', sh.pipeout('krl'), '-s', sh.pipein(get_ssh_ca()), sh.pipein('\n'.join(krl_data).encode()), stdout=sys.stderr)
-        sys.stdout.buffer.write(sh.out['krl'])
