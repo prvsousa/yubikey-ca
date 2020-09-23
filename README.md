@@ -61,13 +61,13 @@ or to your SSH CA certificate:
 
 ### Issuing and revoking certificates
 
-Generating a certificate:
-
-* `openssl genrsa 2048 | ./scriptyk client-cert`
-
-You must give a name to the certificate, for example:
+Generate a certificate with a subject name signed by the CA, for example:
 
 * `./scriptyk client-cert -s "/O=Example Inc/CN=John Doe"`
+
+You also can specify the name for the private key and certificate files with "-n":
+
+* `./scriptyk client-cert -s "/O=Example Inc/CN=John Doe -n "john"`
 
 You can use other algorithms for your client certificates, for example
 `openssl genrsa 4096` for a different key size or `openssl ecparam
@@ -89,9 +89,7 @@ Generate a CRL containing the revoked certificates:
 
 * `./scriptyk crl`
 
-## Encryption and Decryption with ECC 
-
-### Example with Charles and Denis, being Charles the owner of the yubikey
+### For manually creation of a communication between Charles and Denis, being Charles the owner of the yubikey and self-sign the certificate
 
 Generate private key of Charles
 
@@ -108,6 +106,8 @@ Generate certificate from private key
 Import certificate to the slot 9d
 
 * `yubico-piv-tool -s9d -aimport-certificate -i CharlesCert.pem`
+
+#### Example of generation of a shared secret between two parties
 
 Derive a shared symmetric key between Charles and Dennis (With dennis public key)
 
